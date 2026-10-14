@@ -2,952 +2,151 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Interactive Multi-Marker AR | HCI Project</title>
-
-  <!-- Pinned Stable Library Versions -->
-  <!-- A-Frame v1.3.0 -->
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <!-- AR.js for A-Frame v3.4.5 -->
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
-
-  <style>
-    /* ==========================================================================
-       1. CSS RESET & ACCESSIBLE STYLING (HCI Principle: Consistency & Accessibility)
-       ========================================================================== */
-    :root {
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
-      --success: #059669;
-      --warning: #d97706;
-      --danger: #dc2626;
-      --bg-dark: rgba(15, 23, 42, 0.90);
-      --bg-card: rgba(30, 41, 59, 0.95);
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --border: rgba(255, 255, 255, 0.18);
-      --focus-ring: #60a5fa;
-      --radius-lg: 16px;
-      --radius-md: 10px;
-      --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: var(--font-family);
-      background-color: #000000;
-      color: var(--text-main);
-    }
-
-    /* Screen Reader Accessibility Utility */
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    button:focus-visible, a:focus-visible {
-      outline: 3px solid var(--focus-ring);
-      outline-offset: 2px;
-    }
-
-    /* ==========================================================================
-       2. CAMERA & AR CANVAS STYLING
-       ========================================================================== */
-    #ar-scene-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-    }
-
-    .a-canvas {
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* Hide WebAR canvas until camera permissions are granted */
-    .ar-hidden {
-      display: none !important;
-    }
-
-    /* ==========================================================================
-       3. UI OVERLAY CONTAINER (HCI Principle: User Control & Freedom)
-       ========================================================================== */
-    #ui-overlay {
-      position: relative;
-      z-index: 10;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      pointer-events: none; /* Allow touch-through to 3D canvas */
-      padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-    }
-
-    .interactive-element {
-      pointer-events: auto;
-    }
-
-    /* ==========================================================================
-       4. APP HEADER & SYSTEM STATUS BADGE (HCI Principle: Visibility of Status)
-       ========================================================================== */
-    header.app-header {
-      background: var(--bg-dark);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 10px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    }
-
-    .title-area h1 {
-      font-size: 0.95rem;
-      font-weight: 700;
-      letter-spacing: 0.2px;
-      color: #ffffff;
-    }
-
-    .title-area p {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-    }
-
-    /* Status Badge Indicator */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 10px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: rgba(217, 119, 6, 0.25);
-      border: 1px solid var(--warning);
-      color: #fef3c7;
-      transition: all 0.3s ease;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--warning);
-      animation: pulse 1.8s infinite;
-    }
-
-    @keyframes pulse {
-      0% { opacity: 0.4; transform: scale(0.85); }
-      50% { opacity: 1; transform: scale(1.15); }
-      100% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    .status-badge.status-ready {
-      background: rgba(37, 99, 235, 0.25);
-      border-color: var(--primary);
-      color: #dbeafe;
-    }
-    .status-badge.status-ready .status-dot { background-color: var(--primary); }
-
-    .status-badge.status-detected {
-      background: rgba(5, 150, 105, 0.28);
-      border-color: var(--success);
-      color: #a7f3d0;
-    }
-    .status-badge.status-detected .status-dot { background-color: var(--success); }
-
-    .status-badge.status-error {
-      background: rgba(220, 38, 38, 0.3);
-      border-color: var(--danger);
-      color: #fecaca;
-    }
-    .status-badge.status-error .status-dot { background-color: var(--danger); animation: none; }
-
-    /* ==========================================================================
-       5. MODEL INFO PANEL (HCI Principle: Feedback)
-       ========================================================================== */
-    .info-panel {
-      background: var(--bg-card);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 10px 14px;
-      margin-top: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: opacity 0.3s ease, transform 0.3s ease;
-    }
-
-    .info-panel.hidden {
-      opacity: 0;
-      transform: translateY(-6px);
-      pointer-events: none;
-    }
-
-    .model-details {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .model-name {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: #38bdf8;
-    }
-
-    .model-desc {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-    }
-
-    /* ==========================================================================
-       6. BOTTOM CONTROLS & MODEL SELECTOR (HCI Principle: Learnability & Control)
-       ========================================================================== */
-    .bottom-controls {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 2px;
-    }
-
-    /* Manual Model Selector Tabs */
-    .model-selector {
-      background: var(--bg-dark);
-      backdrop-filter: blur(8px);
-      border: 1px solid var(--border);
-      border-radius: 30px;
-      padding: 3px;
-      display: flex;
-      gap: 4px;
-      width: 100%;
-      max-width: 380px;
-    }
-
-    .selector-btn {
-      flex: 1;
-      padding: 8px 6px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      font-size: 0.75rem;
-      font-weight: 600;
-      border-radius: 20px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-align: center;
-    }
-
-    .selector-btn.active {
-      background: var(--primary);
-      color: #ffffff;
-      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
-    }
-
-    /* Toolbar Action Buttons */
-    .action-toolbar {
-      display: flex;
-      gap: 8px;
-      width: 100%;
-      max-width: 380px;
-      justify-content: center;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      background: var(--bg-card);
-      color: var(--text-main);
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-      min-height: 44px; /* Minimum mobile touch target */
-      min-width: 44px;
-      transition: background 0.2s ease, transform 0.1s ease;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-
-    .btn:active {
-      transform: scale(0.95);
-    }
-
-    .btn-primary {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: #ffffff;
-    }
-
-    .btn-primary:hover {
-      background: var(--primary-hover);
-    }
-
-    /* ==========================================================================
-       7. MODALS & ONBOARDING (HCI Principle: Error Prevention & Recovery)
-       ========================================================================== */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.88);
-      backdrop-filter: blur(8px);
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      opacity: 1;
-      transition: opacity 0.3s ease;
-    }
-
-    .modal-overlay.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .modal-card {
-      background: #0f172a;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 20px;
-      max-width: 440px;
-      width: 100%;
-      max-height: 88vh;
-      overflow-y: auto;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-    }
-
-    .modal-card h2 {
-      font-size: 1.15rem;
-      color: #38bdf8;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .modal-card p {
-      font-size: 0.84rem;
-      line-height: 1.45;
-      color: #cbd5e1;
-      margin-bottom: 12px;
-    }
-
-    .instruction-list {
-      list-style: none;
-      margin-bottom: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .instruction-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      font-size: 0.82rem;
-      color: #e2e8f0;
-      background: rgba(255, 255, 255, 0.04);
-      padding: 8px 10px;
-      border-radius: 8px;
-    }
-
-    .step-number {
-      background: var(--primary);
-      color: #ffffff;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.72rem;
-      font-weight: bold;
-      flex-shrink: 0;
-    }
-
-    .marker-preview-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin: 10px 0;
-      text-align: center;
-    }
-
-    .marker-card-preview {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 6px;
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    .marker-card-preview img {
-      width: 100%;
-      aspect-ratio: 1;
-      object-fit: contain;
-      background: #ffffff;
-      border-radius: 4px;
-      padding: 4px;
-    }
-
-    .marker-card-preview span {
-      font-size: 0.68rem;
-      color: var(--text-muted);
-      display: block;
-      margin-top: 4px;
-    }
-
-    /* Dynamic Camera Error Alert Banner */
-    .alert-banner {
-      background: rgba(220, 38, 38, 0.25);
-      border: 1px solid var(--danger);
-      color: #fecaca;
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 0.78rem;
-      line-height: 1.4;
-      margin-bottom: 12px;
-      display: none;
-    }
-
-    .touch-icon {
-      width: 18px;
-      height: 18px;
-      fill: currentColor;
-      flex-shrink: 0;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Hiro AR — HCI Demo</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- ==========================================================================
-       AR SCENE CONTAINER (A-Frame v1.3.0 + AR.js v3.4.5)
-       ========================================================================== -->
-  <div id="ar-scene-container" class="ar-hidden">
-    <a-scene
-      embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; maxDetectionRate: 30;"
-      vr-mode-ui="enabled: false"
-      renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true;"
-      id="ar-scene">
+  <div id="splash" class="panel">
+    <h1>Hiro AR — HCI Demo</h1>
+    <p class="instructions">Select a model, then point your camera at the <strong>Hiro marker</strong>.</p>
+    <div class="marker-info">
+      <p>📄 You need the <strong>Hiro marker image</strong>.</p>
+      <p>Print or display it: <a href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png" target="_blank" rel="noopener">Open Hiro marker ↗</a></p>
+      <p class="small">Square black border with pattern inside. Hold flat under good lighting.</p>
+    </div>
+    <div id="status-box"><span id="status-icon">📷</span><span id="status-text">Ready to start.</span></div>
+    <button id="start-btn" class="btn-primary">Start Camera</button>
+    <p class="small muted">Tap <strong>Allow</strong> when prompted.</p>
+  </div>
 
-      <!-- LIGHTING SETUP -->
-      <a-entity type="ambient" light="color: #ffffff; intensity: 0.85"></a-entity>
-      <a-entity type="directional" light="color: #ffffff; intensity: 1.2" position="1 4 2"></a-entity>
+  <div id="ar-hud" class="hidden">
+    <div id="ar-status-bar"><span id="ar-status-icon">🔄</span><span id="ar-status-text">Starting AR…</span></div>
+    <button id="stop-btn" class="btn-stop">✕ Stop</button>
+  </div>
 
-      <!-- ===================================================================
-           MARKER 1: Hiro Pattern -> 3D Robot Alpha Model
-           =================================================================== -->
-      <a-marker
-        id="marker-1"
-        type="pattern"
-        preset="hiro"
-        registerevents="markerId: Robot Alpha; markerIndex: 1">
+  <div id="joystick-zone" class="hidden">
+    <p id="joystick-hint">Move joystick to walk</p>
+    <div id="joystick-base">
+      <div id="joystick-ring"></div>
+      <div id="joystick-thumb"></div>
+    </div>
+  </div>
 
-        <a-entity id="model-wrapper-1" position="0 0 0" scale="0.6 0.6 0.6" rotation="0 0 0">
-          <!-- High-Fidelity Procedural 3D Robot Mesh -->
-          <a-entity id="procedural-robot-1">
-            <!-- Head & Glowing Visor -->
-            <a-box position="0 1.4 0" width="0.5" height="0.4" depth="0.4" color="#38bdf8"></a-box>
-            <a-box position="0 1.45 0.21" width="0.4" height="0.12" depth="0.05" color="#00f0ff" material="emissive: #00f0ff; emissiveIntensity: 0.7"></a-box>
-            <!-- Chest & Reactor Core -->
-            <a-box position="0 0.8 0" width="0.7" height="0.7" depth="0.4" color="#1e293b"></a-box>
-            <a-sphere position="0 0.85 0.21" radius="0.1" color="#38bdf8" material="emissive: #38bdf8; emissiveIntensity: 0.9"></a-sphere>
-            <!-- Arms -->
-            <a-cylinder position="-0.48 0.8 0" radius="0.08" height="0.6" color="#0284c7"></a-cylinder>
-            <a-cylinder position="0.48 0.8 0" radius="0.08" height="0.6" color="#0284c7"></a-cylinder>
-            <!-- Legs -->
-            <a-cylinder position="-0.2 0.2 0" radius="0.1" height="0.6" color="#334155"></a-cylinder>
-            <a-cylinder position="0.2 0.2 0" radius="0.1" height="0.6" color="#334155"></a-cylinder>
-            <!-- Pedestal Ring Anchor -->
-            <a-ring position="0 0 0" rotation="-90 0 0" radius-inner="0.6" radius-outer="0.8" color="#38bdf8" material="side: double; opacity: 0.7"></a-ring>
-          </a-entity>
+  <div id="ar-controls" class="hidden">
+    <div id="model-selector">
+      <button class="model-btn active" data-model="robot">1 · Robot</button>
+      <button class="model-btn"        data-model="mecha">2 · Mecha</button>
+    </div>
+    <div id="rotation-controls">
+      <button id="btn-rotate-left"  class="ctrl-btn">↶ Left</button>
+      <button id="btn-reset"        class="ctrl-btn">Reset</button>
+      <button id="btn-rotate-right" class="ctrl-btn">↻ Right</button>
+      <button id="btn-jump"         class="ctrl-btn jump-btn">↑ Jump</button>
+    </div>
+  </div>
+
+  <a-scene id="ar-scene" class="hidden" embedded
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+    renderer="logarithmicDepthBuffer: true; alpha: true;"
+    vr-mode-ui="enabled: false">
+
+    <a-marker id="hiro-marker" preset="hiro" emitevents="true">
+
+      <!-- MODEL 1: ROBOT — limbs in pivot entities -->
+      <a-entity id="model-robot">
+        <!-- Torso -->
+        <a-box position="0 0.35 0" width="0.4" height="0.35" depth="0.2" color="#2979FF"></a-box>
+        <a-box    position="0 0.38 0.105"   width="0.22" height="0.18" depth="0.02" color="#0D47A1"></a-box>
+        <a-sphere position="-0.05 0.4 0.12" radius="0.03" color="#FF5252"></a-sphere>
+        <a-sphere position=" 0.05 0.4 0.12" radius="0.03" color="#76FF03"></a-sphere>
+        <!-- Head -->
+        <a-box position="0 0.7 0" width="0.28" height="0.28" depth="0.22" color="#40C4FF"></a-box>
+        <a-sphere position="-0.07 0.73 0.115" radius="0.045" color="#FFEB3B"></a-sphere>
+        <a-sphere position=" 0.07 0.73 0.115" radius="0.045" color="#FFEB3B"></a-sphere>
+        <a-box    position="0 0.62 0.115"     width="0.16" height="0.04" depth="0.02" color="#FF5252"></a-box>
+        <a-cylinder position="0 0.92 0" radius="0.025" height="0.12" color="#40C4FF"></a-cylinder>
+        <a-sphere   position="0 1.0 0"  radius="0.045" color="#FF5252"></a-sphere>
+
+        <!-- LEFT ARM — pivot at shoulder (Y = 0.35 + 0.16 = 0.51) -->
+        <a-entity id="robot-arm-l" position="-0.28 0.51 0">
+          <a-box    position="0 -0.16 0" width="0.1" height="0.32" depth="0.12" color="#2979FF"></a-box>
+          <a-sphere position="0 -0.32 0" radius="0.07" color="#40C4FF"></a-sphere>
         </a-entity>
-
-      </a-marker>
-
-      <!-- ===================================================================
-           MARKER 2: Kanji Pattern -> 3D Titan Mecha Model
-           =================================================================== -->
-      <a-marker
-        id="marker-2"
-        type="pattern"
-        preset="kanji"
-        registerevents="markerId: Titan Mecha; markerIndex: 2">
-
-        <a-entity id="model-wrapper-2" position="0 0 0" scale="0.6 0.6 0.6" rotation="0 0 0">
-          <!-- High-Fidelity Procedural 3D Mecha Titan Mesh -->
-          <a-entity id="procedural-mecha-2">
-            <!-- Heavy Armor Chest -->
-            <a-box position="0 0.9 0" width="0.85" height="0.75" depth="0.5" color="#b91c1c"></a-box>
-            <!-- Angular Shoulder Guards -->
-            <a-box position="-0.55 1.1 0" width="0.35" height="0.35" depth="0.45" color="#7f1d1d" rotation="0 0 15"></a-box>
-            <a-box position="0.55 1.1 0" width="0.35" height="0.35" depth="0.45" color="#7f1d1d" rotation="0 0 -15"></a-box>
-            <!-- Mecha Head & Gold Visor -->
-            <a-cone position="0 1.45 0" radius-bottom="0.25" radius-top="0.1" height="0.3" color="#f87171"></a-cone>
-            <a-box position="0 1.42 0.15" width="0.3" height="0.08" depth="0.05" color="#facc15" material="emissive: #facc15; emissiveIntensity: 0.9"></a-box>
-            <!-- Dual Shoulder Cannons -->
-            <a-cylinder position="-0.3 1.35 -0.1" radius="0.05" height="0.5" color="#475569" rotation="80 0 0"></a-cylinder>
-            <a-cylinder position="0.3 1.35 -0.1" radius="0.05" height="0.5" color="#475569" rotation="80 0 0"></a-cylinder>
-            <!-- Base Guard Ring -->
-            <a-ring position="0 0 0" rotation="-90 0 0" radius-inner="0.6" radius-outer="0.85" color="#ef4444" material="side: double; opacity: 0.7"></a-ring>
-          </a-entity>
+        <!-- RIGHT ARM -->
+        <a-entity id="robot-arm-r" position="0.28 0.51 0">
+          <a-box    position="0 -0.16 0" width="0.1" height="0.32" depth="0.12" color="#2979FF"></a-box>
+          <a-sphere position="0 -0.32 0" radius="0.07" color="#40C4FF"></a-sphere>
         </a-entity>
-
-      </a-marker>
-
-      <!-- ===================================================================
-           MARKER 3: Letter A Pattern -> 3D Motherboard Hub Model
-           =================================================================== -->
-      <a-marker
-        id="marker-3"
-        type="pattern"
-        url="https://raw.githack.com/AR-js-org/AR.js/master/three.js/examples/marker-training/examples/pattern-files/pattern-letterA.patt"
-        registerevents="markerId: Motherboard Hub; markerIndex: 3">
-
-        <a-entity id="model-wrapper-3" position="0 0 0" scale="0.6 0.6 0.6" rotation="0 0 0">
-          <!-- High-Fidelity Procedural 3D Computer Motherboard Mesh -->
-          <a-entity id="procedural-motherboard-3">
-            <!-- PCB Board Base -->
-            <a-box position="0 0.05 0" width="1.2" height="0.06" depth="1.2" color="#065f46"></a-box>
-            <!-- CPU Socket & Heatsink Block -->
-            <a-box position="-0.25 0.12 -0.2" width="0.4" height="0.1" depth="0.4" color="#94a3b8"></a-box>
-            <a-box position="-0.25 0.22 -0.2" width="0.35" height="0.12" depth="0.35" color="#334155"></a-box>
-            <!-- 4x RAM Memory Sticks -->
-            <a-box position="0.25 0.15 -0.35" width="0.04" height="0.14" depth="0.5" color="#0284c7"></a-box>
-            <a-box position="0.33 0.15 -0.35" width="0.04" height="0.14" depth="0.5" color="#0284c7"></a-box>
-            <a-box position="0.41 0.15 -0.35" width="0.04" height="0.14" depth="0.5" color="#0284c7"></a-box>
-            <a-box position="0.49 0.15 -0.35" width="0.04" height="0.14" depth="0.5" color="#0284c7"></a-box>
-            <!-- PCIe Slots -->
-            <a-box position="-0.1 0.1 0.2" width="0.8" height="0.06" depth="0.06" color="#f59e0b"></a-box>
-            <a-box position="-0.1 0.1 0.38" width="0.8" height="0.06" depth="0.06" color="#f59e0b"></a-box>
-            <!-- Chipset Heatsink -->
-            <a-cylinder position="0.3 0.12 0.3" radius="0.12" height="0.08" color="#dc2626"></a-cylinder>
-            <!-- PCB Circuit Halo Ring -->
-            <a-ring position="0 0 0" rotation="-90 0 0" radius-inner="0.8" radius-outer="0.95" color="#10b981" material="side: double; opacity: 0.8"></a-ring>
-          </a-entity>
+        <!-- LEFT LEG — pivot at hip (Y = 0 + 0.125 = 0.125) -->
+        <a-entity id="robot-leg-l" position="-0.12 0.125 0">
+          <a-box position="0 -0.125 0"    width="0.12" height="0.25" depth="0.14" color="#1565C0"></a-box>
+          <a-box position="0 -0.265 0.04" width="0.14" height="0.07" depth="0.2"  color="#1565C0"></a-box>
         </a-entity>
+        <!-- RIGHT LEG -->
+        <a-entity id="robot-leg-r" position="0.12 0.125 0">
+          <a-box position="0 -0.125 0"    width="0.12" height="0.25" depth="0.14" color="#1565C0"></a-box>
+          <a-box position="0 -0.265 0.04" width="0.14" height="0.07" depth="0.2"  color="#1565C0"></a-box>
+        </a-entity>
+      </a-entity>
 
-      </a-marker>
+      <!-- MODEL 2: MECHA — limbs in pivot entities -->
+      <a-entity id="model-mecha" visible="false">
+        <!-- Neck -->
+        <a-cylinder position="0 0.55 0" radius="0.07" height="0.1" color="#546E7A"></a-cylinder>
+        <!-- Head -->
+        <a-box position="0 0.72 0"     width="0.36" height="0.26" depth="0.3"  color="#455A64"></a-box>
+        <a-box position="0 0.74 0.155" width="0.28" height="0.08" depth="0.02" color="#FF6D00"></a-box>
+        <a-box position="0 0.83 0.12"  width="0.34" height="0.04" depth="0.08" color="#37474F"></a-box>
+        <a-box position="-0.2 0.72 0"  width="0.05" height="0.24" depth="0.26" color="#37474F"></a-box>
+        <a-box position=" 0.2 0.72 0"  width="0.05" height="0.24" depth="0.26" color="#37474F"></a-box>
+        <a-box position="0 0.89 0"     width="0.08" height="0.1"  depth="0.2"  color="#546E7A"></a-box>
+        <!-- Torso -->
+        <a-box position="0 0.35 0"        width="0.58" height="0.4"  depth="0.32" color="#37474F"></a-box>
+        <a-sphere position="0 0.42 0.17"  radius="0.07" color="#FF6D00"></a-sphere>
+        <a-box position="-0.16 0.28 0.17" width="0.09" height="0.12" depth="0.02" color="#263238"></a-box>
+        <a-box position=" 0.16 0.28 0.17" width="0.09" height="0.12" depth="0.02" color="#263238"></a-box>
+        <!-- Shoulder pads — static on torso -->
+        <a-box position="-0.42 0.52 0" width="0.2" height="0.14" depth="0.3" color="#546E7A"></a-box>
+        <a-box position=" 0.42 0.52 0" width="0.2" height="0.14" depth="0.3" color="#546E7A"></a-box>
 
-      <!-- Camera Entity -->
-      <a-entity camera></a-entity>
-    </a-scene>
-  </div>
+        <!-- LEFT ARM — pivot at shoulder (original arm top = 0.3+0.17 = 0.47) -->
+        <a-entity id="mecha-arm-l" position="-0.42 0.47 0">
+          <a-box      position="0 -0.17 0"    width="0.16" height="0.34" depth="0.18" color="#455A64"></a-box>
+          <a-cylinder position="0 -0.32 0.16" radius="0.055" height="0.28" rotation="90 0 0" color="#263238"></a-cylinder>
+          <a-cylinder position="0 -0.32 0.31" radius="0.065" height="0.03" rotation="90 0 0" color="#FF6D00"></a-cylinder>
+        </a-entity>
+        <!-- RIGHT ARM -->
+        <a-entity id="mecha-arm-r" position="0.42 0.47 0">
+          <a-box position="0 -0.17 0"        width="0.16" height="0.34" depth="0.18" color="#455A64"></a-box>
+          <a-box position="0 -0.33 0.06"     width="0.14" height="0.14" depth="0.16" color="#37474F"></a-box>
+          <a-box position="-0.07 -0.41 0.14" width="0.05" height="0.14" depth="0.05" color="#90A4AE"></a-box>
+          <a-box position="0    -0.42 0.16"  width="0.05" height="0.16" depth="0.05" color="#90A4AE"></a-box>
+          <a-box position="0.07 -0.41 0.14"  width="0.05" height="0.14" depth="0.05" color="#90A4AE"></a-box>
+        </a-entity>
+        <!-- LEFT LEG — pivot at hip (original leg top = 0.03+0.15 = 0.18) -->
+        <a-entity id="mecha-leg-l" position="-0.16 0.18 0">
+          <a-box      position="0 -0.15 0"    width="0.18" height="0.3"  depth="0.2"  color="#37474F"></a-box>
+          <a-cylinder position="0 -0.20 0.12" radius="0.035" height="0.12" rotation="90 0 0" color="#FF6D00"></a-cylinder>
+          <a-box      position="0 -0.34 0"    width="0.16" height="0.18" depth="0.18" color="#455A64"></a-box>
+          <a-box      position="0 -0.45 0.06" width="0.22" height="0.08" depth="0.3"  color="#37474F"></a-box>
+        </a-entity>
+        <!-- RIGHT LEG -->
+        <a-entity id="mecha-leg-r" position="0.16 0.18 0">
+          <a-box      position="0 -0.15 0"    width="0.18" height="0.3"  depth="0.2"  color="#37474F"></a-box>
+          <a-cylinder position="0 -0.20 0.12" radius="0.035" height="0.12" rotation="90 0 0" color="#FF6D00"></a-cylinder>
+          <a-box      position="0 -0.34 0"    width="0.16" height="0.18" depth="0.18" color="#455A64"></a-box>
+          <a-box      position="0 -0.45 0.06" width="0.22" height="0.08" depth="0.3"  color="#37474F"></a-box>
+        </a-entity>
+      </a-entity>
 
-  <!-- ==========================================================================
-       USER INTERACTION HUD OVERLAY (HCI Principles Implemented)
-       ========================================================================== -->
-  <div id="ui-overlay">
+    </a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
 
-    <!-- TOP HEADER: System Status Bar -->
-    <header class="app-header interactive-element">
-      <div class="title-area">
-        <h1>Multi-Marker AR</h1>
-        <p>HCI Interactive Web App</p>
-      </div>
-
-      <!-- Live AR System Status Indicator Badge -->
-      <div id="status-badge" class="status-badge" role="status" aria-live="polite">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span id="status-text">Ready to Start</span>
-      </div>
-    </header>
-
-    <!-- MIDDLE: Active Model Info Card (Feedback Principle) -->
-    <div id="info-panel" class="info-panel interactive-element hidden" aria-live="polite">
-      <div class="model-details">
-        <span id="active-model-title" class="model-name">No Marker Detected</span>
-        <span id="active-model-desc" class="model-desc">Point your camera at Hiro, Kanji, or Letter A marker</span>
-      </div>
-      <button id="help-btn" class="btn" aria-label="Open Instructions Guide" style="padding: 6px 10px; min-height:36px;">
-        <svg class="touch-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
-        Guide
-      </button>
-    </div>
-
-    <!-- BOTTOM CONTROLS: Model Selector & Transform Buttons -->
-    <div class="bottom-controls">
-
-      <!-- Manual Model Tab Selector -->
-      <div class="model-selector interactive-element" role="tablist" aria-label="AR Model Switcher">
-        <button id="tab-1" class="selector-btn active" role="tab" aria-selected="true" onclick="selectModelTab(1)">1. Robot</button>
-        <button id="tab-2" class="selector-btn" role="tab" aria-selected="false" onclick="selectModelTab(2)">2. Mecha</button>
-        <button id="tab-3" class="selector-btn" role="tab" aria-selected="false" onclick="selectModelTab(3)">3. Board</button>
-      </div>
-
-      <!-- Transform Controls Toolbar -->
-      <div class="action-toolbar interactive-element" role="toolbar" aria-label="3D Model Controls">
-        <button id="rotate-left-btn" class="btn" aria-label="Rotate Model Counter-Clockwise" title="Rotate Left">
-          <svg class="touch-icon" viewBox="0 0 24 24"><path d="M7.11 8.53E-5L8.53 1.41L5.94 4H12C16.42 4 20 7.58 20 12C20 16.42 16.42 20 12 20C7.58 20 4 16.42 4 12H2C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2H5.94L8.53 4.59L7.11 6L2.11 1L7.11 8.53E-5Z"/></svg>
-          Rotate -
-        </button>
-
-        <button id="reset-btn" class="btn btn-primary" aria-label="Reset Active Model Orientation">
-          <svg class="touch-icon" viewBox="0 0 24 24"><path d="M12 5V1L7 6L12 11V7C15.31 7 18 9.69 18 13C18 16.31 15.31 19 12 19C8.69 19 6 16.31 6 13H4C4 17.42 7.58 21 12 21C16.42 21 20 17.42 20 13C20 8.58 16.42 5 12 5Z"/></svg>
-          Reset
-        </button>
-
-        <button id="rotate-right-btn" class="btn" aria-label="Rotate Model Clockwise" title="Rotate Right">
-          <svg class="touch-icon" viewBox="0 0 24 24"><path d="M16.89 8.53E-5L15.47 1.41L18.06 4H12C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C16.42 20 20 16.42 20 12H22C22 17.52 17.52 22 12 22C6.48 22 2 17.52 2 12C2 6.48 6.48 2 12 2H18.06L15.47 4.59L16.89 6L21.89 1L16.89 8.53E-5Z"/></svg>
-          Rotate +
-        </button>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ==========================================================================
-       MODAL 1: START CAMERA & PERMISSION ONBOARDING
-       ========================================================================== -->
-  <div id="start-modal" class="modal-overlay">
-    <div class="modal-card">
-      <h2>
-        <svg class="touch-icon" style="width:22px;height:22px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-        Ready to Explore AR?
-      </h2>
-      <p>This HCI web application uses your phone camera to detect standard AR markers and overlay 3D models in real time.</p>
-
-      <!-- Alert Banner for Camera Permission or Secure Context Errors -->
-      <div id="camera-error-banner" class="alert-banner"></div>
-
-      <ul class="instruction-list">
-        <li class="instruction-item">
-          <span class="step-number">1</span>
-          <span>Click <strong>Start AR Camera</strong> below and allow browser camera access when prompted.</span>
-        </li>
-        <li class="instruction-item">
-          <span class="step-number">2</span>
-          <span>Point your camera at a printed or screen-displayed AR pattern marker.</span>
-        </li>
-        <li class="instruction-item">
-          <span class="step-number">3</span>
-          <span>Use the Rotate and Reset buttons to interact with active 3D models.</span>
-        </li>
-      </ul>
-
-      <button id="start-ar-btn" class="btn btn-primary" style="width:100%; padding: 12px; font-size: 0.95rem;">
-        Start AR Camera
-      </button>
-    </div>
-  </div>
-
-  <!-- ==========================================================================
-       MODAL 2: SCANNING INSTRUCTIONS & MARKER PREVIEWS
-       ========================================================================== -->
-  <div id="guide-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h2>
-        <svg class="touch-icon" style="width:22px;height:22px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
-        Marker Printables Guide
-      </h2>
-      <p>Scan any of these 3 standard AR pattern markers to reveal their corresponding 3D models:</p>
-
-      <div class="marker-preview-grid">
-        <div class="marker-card-preview">
-          <img src="https://raw.githack.com/AR-js-org/AR.js/master/data/images/hiro.png" alt="Hiro Marker Preview" />
-          <span>1. Hiro<br/>(Robot)</span>
-        </div>
-        <div class="marker-card-preview">
-          <img src="https://raw.githack.com/AR-js-org/AR.js/master/data/images/kanji.png" alt="Kanji Marker Preview" />
-          <span>2. Kanji<br/>(Mecha)</span>
-        </div>
-        <div class="marker-card-preview">
-          <img src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/examples/marker-training/examples/pattern-files/pattern-letterA.png" alt="Letter A Marker Preview" />
-          <span>3. Letter A<br/>(Board)</span>
-        </div>
-      </div>
-
-      <p style="font-size:0.78rem; color:var(--text-muted); margin-top:6px;">
-        <strong>Tip:</strong> Open these markers on a secondary laptop/tablet screen or print them on white paper under standard room lighting.
-      </p>
-
-      <button id="close-guide-btn" class="btn btn-primary" style="width:100%; margin-top:12px;">
-        Return to AR View
-      </button>
-    </div>
-  </div>
-
-  <!-- ==========================================================================
-       JAVASCRIPT LOGIC & HANDLERS
-       ========================================================================== -->
-  <script>
-    /* ==========================================================================
-       STATE MANAGEMENT
-       ========================================================================== */
-    const appState = {
-      activeFocusIndex: 1,      // Currently selected focus tab/model (1, 2, or 3)
-      detectedMarkers: new Set(),// Tracks indices of markers currently visible in camera frame
-      modelRotations: { 1: 0, 2: 0, 3: 0 }, // Y-axis rotation in degrees for each model
-      cameraStreamActive: false
-    };
-
-    // Model Metadata
-    const modelData = {
-      1: {
-        name: "Robot Alpha",
-        desc: "Interactive Android with Energy Visor & Chest Core",
-        wrapperId: "model-wrapper-1"
-      },
-      2: {
-        name: "Titan Mecha",
-        desc: "Heavy Tactical Bipedal Mech with Shoulder Cannons",
-        wrapperId: "model-wrapper-2"
-      },
-      3: {
-        name: "Motherboard Hub",
-        desc: "3D Microchip Architecture with RAM & Heat Sink",
-        wrapperId: "model-wrapper-3"
-      }
-    };
-
-    /* ==========================================================================
-       DOM REFERENCES
-       ========================================================================== */
-    const statusBadge = document.getElementById('status-badge');
-    const statusText = document.getElementById('status-text');
-    const infoPanel = document.getElementById('info-panel');
-    const modelTitle = document.getElementById('active-model-title');
-    const modelDesc = document.getElementById('active-model-desc');
-    const startModal = document.getElementById('start-modal');
-    const guideModal = document.getElementById('guide-modal');
-    const cameraErrorBanner = document.getElementById('camera-error-banner');
-    const arSceneContainer = document.getElementById('ar-scene-container');
-    const startArBtn = document.getElementById('start-ar-btn');
-
-    /* ==========================================================================
-       A-FRAME CUSTOM COMPONENT: AR MARKER TRACKING
-       ========================================================================== */
-    AFRAME.registerComponent('registerevents', {
-      schema: {
-        markerId: { type: 'string', default: '' },
-        markerIndex: { type: 'int', default: 1 }
-      },
-      init: function () {
-        const el = this.el;
-        const index = this.data.markerIndex;
-        const name = this.data.markerId;
-
-        // Event: Marker Detected
-        el.addEventListener('markerFound', () => {
-          appState.detectedMarkers.add(index);
-          appState.activeFocusIndex = index; // Synchronize focus model with scanned marker
-          updateStatus('detected', `Detected: ${name}`);
-          updateInfoPanel(index);
-          highlightTab(index);
-        });
-
-        // Event: Marker Lost
-        el.addEventListener('markerLost', () => {
-          appState.detectedMarkers.delete(index);
-          if (appState.detectedMarkers.size === 0) {
-            updateStatus('ready', 'Point camera at a marker');
-          } else {
-            // Revert focus to remaining active marker in view
-            const remainingIndex = Array.from(appState.detectedMarkers)[0];
-            appState.activeFocusIndex = remainingIndex;
-            updateStatus('detected', `Detected: ${modelData[remainingIndex].name}`);
-            updateInfoPanel(remainingIndex);
-            highlightTab(remainingIndex);
-          }
-        });
-      }
-    });
-
-    /* ==========================================================================
-       CAMERA INITIALIZATION & PERMISSION HANDLING (FIX FOR FALSE SUCCESS)
-       ========================================================================== */
-    startArBtn.addEventListener('click', async () => {
-      startArBtn.disabled = true;
-      startArBtn.textContent = "Requesting Camera Access...";
-
-      // Check Secure Context Requirement (HTTPS / Localhost)
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (window.location.protocol !== 'https:' && !isLocalhost) {
-        showCameraError("<strong>Security Context Error:</strong> Camera access requires HTTPS hosting (e.g., GitHub Pages) or Localhost. Local file:// URLs are blocked by mobile browser security policies.");
-        resetStartButton();
-        return;
-      }
-
-      // Check MediaDevices Browser API Support
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showCameraError("<strong>Unsupported Browser:</strong> Camera API is not supported in this browser. Please open in official Google Chrome or Apple Safari.");
-        resetStartButton();
-        return;
-      }
-
-      try {
-        // Request actual camera stream to verify permissions BEFORE initializing WebAR
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-
-        // Permission Granted Successfully!
-        appState.cameraStreamActive = true;
-        
-        // Stop temporary check stream so AR.js can claim camera device cleanly
-        stream.getTracks().forEach(track => track.stop());
-
-        // Reveal WebAR Scene & Hide Modal
-        arSceneContainer.classList.remove('ar-hidden');
-        startModal.classList.add('hidden');
-        infoPanel.classList.remove('hidden');
-
-        updateStatus('ready', 'Point camera at a marker');
-      } catch (err) {
-        console.error("Camera Access Error:", err);
-        let msg = "<strong>Camera Access Denied:</strong> Permission was denied or device camera is busy. Please enable camera permission in your site settings and reload.";
-        if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          msg = "<strong>No Camera Found:</strong> No video recording device was detected on your device.";
-        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-          msg = "<strong>Camera Busy:</strong> Camera is currently in use by another application.";
-        }
-        showCameraError(msg);
-        resetStartButton();
-      }
-    });
-
-    function showCameraError(htmlMessage) {
-      cameraErrorBanner.style.display = 'block';
-      cameraErrorBanner.innerHTML = htmlMessage;
-      updateStatus('error', 'Camera Startup Failed');
-    }
-
-    function resetStartButton() {
-      startArBtn.disabled = false;
-      startArBtn.textContent = "Retry Starting Camera";
-    }
-
-    /* ==========================================================================
-       USER INTERACTION HANDLERS (Rotate Left, Rotate Right, Reset, Manual Tabs)
-       ========================================================================== */
-
-    // Guide Modal Handlers
-    document.getElementById('help-btn').addEventListener('click', () => {
-      guideModal.classList.remove('hidden');
-    });
-    document.getElementById('close-guide-btn').addEventListener('click', () => {
-      guideModal.classList.add('hidden');
-    });
-
-    // Manual Tab Selector (Synchronizes active model focus)
-    window.selectModelTab = function(index) {
-      appState.activeFocusIndex = index;
-      highlightTab(index);
-      updateInfoPanel(index);
-
-      if (appState.detectedMarkers.has(index)) {
-        updateStatus('detected', `Detected: ${modelData[index].name}`);
-      } else {
-        updateStatus('ready', `Active Selection: ${modelData[index].name} (Scan ${getMarkerName(index)})`);
-      }
-    };
-
-    function getMarkerName(idx) {
-      return idx === 1 ? 'Hiro' : idx === 2 ? 'Kanji' : 'Letter A';
-    }
-
-    function highlightTab(index) {
-      for (let i = 1; i <= 3; i++) {
-        const tab = document.getElementById(`tab-${i}`);
-        if (i === index) {
-          tab.classList.add('active');
-          tab.setAttribute('aria-selected', 'true');
-        } else {
-          tab.classList.remove('active');
-          tab.setAttribute('aria-selected', 'false');
-        }
-      }
-    }
-
-    // Rotation Control Buttons
-    document.getElementById('rotate-left-btn').addEventListener('click', () => {
-      rotateActiveModel(-25);
-    });
-
-    document.getElementById('rotate-right-btn').addEventListener('click', () => {
-      rotateActiveModel(25);
-    });
-
-    function rotateActiveModel(deltaDegrees) {
-      const idx = appState.activeFocusIndex;
-      appState.modelRotations[idx] = (appState.modelRotations[idx] + deltaDegrees) % 360;
-
-      const targetWrapper = document.getElementById(modelData[idx].wrapperId);
-      if (targetWrapper) {
-        targetWrapper.setAttribute('rotation', `0 ${appState.modelRotations[idx]} 0`);
-      }
-    }
-
-    // Reset Transform Button
-    document.getElementById('reset-btn').addEventListener('click', () => {
-      const idx = appState.activeFocusIndex;
-      appState.modelRotations[idx] = 0;
-
-      const targetWrapper = document.getElementById(modelData[idx].wrapperId);
-      if (targetWrapper) {
-        targetWrapper.setAttribute('rotation', '0 0 0');
-        targetWrapper.setAttribute('position', '0 0 0');
-        targetWrapper.setAttribute('scale', '0.6 0.6 0.6');
-      }
-
-      updateStatus('ready', `Reset ${modelData[idx].name} transform`);
-    });
-
-    /* ==========================================================================
-       UI FEEDBACK HELPERS
-       ========================================================================== */
-    function updateStatus(type, message) {
-      statusText.textContent = message;
-      statusBadge.className = 'status-badge'; // Reset status classes
-
-      if (type === 'ready') {
-        statusBadge.classList.add('status-ready');
-      } else if (type === 'detected') {
-        statusBadge.classList.add('status-detected');
-      } else if (type === 'error') {
-        statusBadge.classList.add('status-error');
-      }
-    }
-
-    function updateInfoPanel(index) {
-      const data = modelData[index];
-      if (data) {
-        modelTitle.textContent = data.name;
-        modelDesc.textContent = data.desc;
-      }
-    }
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
