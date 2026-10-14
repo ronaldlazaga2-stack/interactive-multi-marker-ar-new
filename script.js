@@ -1,16 +1,10 @@
 /**
- * HIRO AR — script.js (v10 — Minecraft-style walking animation)
+ * HIRO AR — script.js (v11 — Orientation modal)
  *
- * Position authority — all applied inside gameLoopTick:
- *   jumpY[name]        ← written by jump animation rAF only
- *   modelPositions     ← written by joystick movement
- *   walkPhase/Blend    ← written by walking system
- *   rotations[name]    ← lerped toward joystick heading while walking;
- *                        incremented by Rotate buttons; cleared by Reset
- *
- * Limb pivot IDs (in index.html):
- *   robot-arm-l / robot-arm-r / robot-leg-l / robot-leg-r
- *   mecha-arm-l / mecha-arm-r / mecha-leg-l / mecha-leg-r
+ * Orientation X-tilt per model (applied in game loop):
+ *   horizontal → X = 0   (upright, marker flat on table)
+ *   vertical   → X = -90 (tilted, marker on wall)
+ * All v10 features preserved.
  */
 'use strict';
 
@@ -32,6 +26,12 @@ const btnRotateLeft  = document.getElementById('btn-rotate-left');
 const btnReset       = document.getElementById('btn-reset');
 const btnRotateRight = document.getElementById('btn-rotate-right');
 const btnJump        = document.getElementById('btn-jump');
+const orientBtn         = document.getElementById('orient-btn');
+const orientOverlay     = document.getElementById('orient-overlay');
+const orientClose       = document.getElementById('orient-close');
+const orientApply       = document.getElementById('orient-apply');
+const orientCards       = document.querySelectorAll('.orient-card');
+const orientStatusLabel = document.getElementById('orient-status-label');
 
 /* ---- Constants ---- */
 const VIDEO_READY_TIMEOUT_MS = 15000;
@@ -48,6 +48,7 @@ const WALK_PHASE_RATE = 8.5;
 const BOB_HEIGHT      = 0.018;
 const WALK_BLEND_RATE = 7;
 const JOY_MAX_DIST    = 35;
+const ORIENT_TILT     = { horizontal: 0, vertical: -90 };
 
 /* ---- State ---- */
 let selectedModel = 'robot';
@@ -59,14 +60,17 @@ const jumpY          = { robot: 0, mecha: 0 };
 const jump           = { robot:{rafId:null,startTs:null}, mecha:{rafId:null,startTs:null} };
 const walkPhase      = { robot: 0, mecha: 0 };
 const walkBlend      = { robot: 0, mecha: 0 };
+const orientState    = { robot: 'horizontal', mecha: 'horizontal' };
 let gameLoopId = null, lastTs = 0;
 
-/* ---- Joystick state ---- */
+/* ---- Joystick / camera-fix state ---- */
 let joyDX=0, joyDY=0, joyActive=false, joyPtr=null;
-
-/* ---- Camera-fix state ---- */
 let videoReadyTimer=null, videoPollTimer=null,
     domObserver=null, videoStyleObs=null, wrapperStyleObs=null;
+
+/* ---- Modal state ---- */
+let pendingOrient = 'horizontal';
+let modalOpen     = false;
 
 /* ---- Helpers ---- */
 function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
@@ -93,6 +97,44 @@ function applyWalkAnim(name, blend){
   lR.setAttribute('rotation',{x: swing, y:0, z:0});
 }
 
+/* ---- Orientation label ---- */
+function refreshOrientLabel(){
+  if(!orientStatusLabel) return;
+  const lbl = orientState[selectedModel]==='vertical' ? 'Vertical' : 'Horizontal';
+  orientStatusLabel.textContent = `Orientation: ${lbl}`;
+}
+
+/* ---- Orientation modal ---- */
+function openOrientModal(){
+  pendingOrient = orientState[selectedModel];
+  syncOrientCards(pendingOrient);
+  orientOverlay.classList.remove('hidden');
+  requestAnimationFrame(()=> orientOverlay.classList.add('visible'));
+  modalOpen = true;
+}
+function closeOrientModal(){
+  orientOverlay.classList.remove('visible');
+  setTimeout(()=>{ orientOverlay.classList.add('hidden'); modalOpen=false; }, 230);
+}
+function syncOrientCards(orient){
+  orientCards.forEach(card=>{
+    const sel = card.dataset.orient === orient;
+    card.classList.toggle('selected', sel);
+    card.setAttribute('aria-pressed', String(sel));
+  });
+}
+function applyOrientation(){
+  orientState[selectedModel] = pendingOrient;
+  refreshOrientLabel();
+  closeOrientModal();
+  const el=getEntity(selectedModel);
+  if(el){
+    const p=modelPositions[selectedModel];
+    el.setAttribute('position',{x:p.x, y:jumpY[selectedModel], z:p.z});
+    el.setAttribute('rotation',{ x:ORIENT_TILT[orientState[selectedModel]], y:rotations[selectedModel], z:0 });
+  }
+}
+
 /* ---- Game loop ---- */
 function startGameLoop(){ if(gameLoopId!==null)return; lastTs=0; gameLoopId=requestAnimationFrame(gameLoopTick); }
 function stopGameLoop(){ if(gameLoopId!==null){cancelAnimationFrame(gameLoopId);gameLoopId=null;} lastTs=0; }
@@ -102,21 +144,17 @@ function gameLoopTick(ts){
   const dt = lastTs>0 ? Math.min((ts-lastTs)/1000,0.05) : 0.016;
   lastTs=ts;
 
-  const rawMag = Math.sqrt(joyDX*joyDX+joyDY*joyDY);
-  const joyMag = Math.min(rawMag,1);
-  const isMoving = markerVisible && joyMag>JOY_DEAD;
-  const nx = rawMag>0 ? joyDX/rawMag : 0;
-  const nz = rawMag>0 ? joyDY/rawMag : 0;
+  const rawMag=Math.sqrt(joyDX*joyDX+joyDY*joyDY);
+  const joyMag=Math.min(rawMag,1);
+  const isMoving=markerVisible&&joyMag>JOY_DEAD;
+  const nx=rawMag>0?joyDX/rawMag:0;
+  const nz=rawMag>0?joyDY/rawMag:0;
 
   if(isMoving){
     const p=modelPositions[selectedModel], speed=MOVE_SPEED*joyMag;
     p.x=clamp(p.x+nx*speed,-MAX_MOVE,MAX_MOVE);
     p.z=clamp(p.z+nz*speed,-MAX_MOVE,MAX_MOVE);
-
-    // ✅ FIXED: atan2(joyDX, joyDY) — no minus sign
-    // joystick down (joyDY>0) → model faces toward camera (0°)
-    // joystick up   (joyDY<0) → model faces away (180°)
-    const targetFacing = Math.atan2(joyDX, joyDY) * (180 / Math.PI);
+    const targetFacing=Math.atan2(joyDX,joyDY)*(180/Math.PI);
     rotations[selectedModel]=lerpAngle(rotations[selectedModel],targetFacing,TURN_SPEED);
   }
 
@@ -129,15 +167,13 @@ function gameLoopTick(ts){
   }
 
   applyWalkAnim(selectedModel, walkBlend[selectedModel]);
-
-  const bob = BOB_HEIGHT*Math.abs(Math.sin(walkPhase[selectedModel]))*walkBlend[selectedModel];
-
-  if(joyHint) joyHint.textContent = (joyActive&&isMoving) ? 'Release to stop' : 'Move joystick to walk';
+  const bob=BOB_HEIGHT*Math.abs(Math.sin(walkPhase[selectedModel]))*walkBlend[selectedModel];
+  if(joyHint) joyHint.textContent=(joyActive&&isMoving)?'Release to stop':'Move joystick to walk';
 
   const el=getEntity(selectedModel), p=modelPositions[selectedModel];
   if(el){
     el.setAttribute('position',{x:p.x, y:jumpY[selectedModel]+bob, z:p.z});
-    el.setAttribute('rotation',{x:0, y:rotations[selectedModel], z:0});
+    el.setAttribute('rotation',{ x:ORIENT_TILT[orientState[selectedModel]], y:rotations[selectedModel], z:0 });
   }
   gameLoopId=requestAnimationFrame(gameLoopTick);
 }
@@ -151,7 +187,7 @@ function cancelJump(name){
 }
 function cancelAllJumps(){cancelJump('robot');cancelJump('mecha');}
 function startJump(){
-  const name=selectedModel, j=jump[name];
+  const name=selectedModel,j=jump[name];
   if(j.rafId!==null)return;
   j.startTs=performance.now(); btnJump.classList.add('jumping');
   function frame(now){
@@ -169,7 +205,7 @@ function rotateRight(){ rotations[selectedModel]+=ROTATE_STEP; }
 
 /* ---- Reset ---- */
 function snapThumbToCenter(animated){
-  const t=document.getElementById('joystick-thumb'); if(!t)return;
+  const t=document.getElementById('joystick-thumb');if(!t)return;
   if(animated!==false){t.style.transition='transform 0.14s ease-out';setTimeout(()=>{if(t)t.style.transition='';},160);}
   t.style.transform='translate(-50%,-50%)';
 }
@@ -180,19 +216,22 @@ function resetModel(){
   modelPositions[selectedModel]={x:0,z:0};
   rotations[selectedModel]=0;
   resetLimbs(selectedModel);
+  // Orientation is NOT reset — user must change it via modal
 }
 
 /* ---- Model selection ---- */
 function applyModelVisibility(){
-  const r=document.getElementById('model-robot'), m=document.getElementById('model-mecha');
+  const r=document.getElementById('model-robot'),m=document.getElementById('model-mecha');
   if(r) r.setAttribute('visible',selectedModel==='robot');
   if(m) m.setAttribute('visible',selectedModel==='mecha');
 }
 function selectModel(name){
-  if(name!==selectedModel){ resetLimbs(selectedModel); cancelJump(selectedModel); joyDX=0;joyDY=0; snapThumbToCenter(true); }
+  if(name!==selectedModel){resetLimbs(selectedModel);cancelJump(selectedModel);joyDX=0;joyDY=0;snapThumbToCenter(true);}
   selectedModel=name;
   modelBtns.forEach(b=>b.classList.toggle('active',b.dataset.model===name));
-  applyModelVisibility(); refreshHud();
+  applyModelVisibility();
+  refreshOrientLabel();
+  refreshHud();
 }
 
 /* ---- HUD ---- */
@@ -206,20 +245,17 @@ function refreshHud(){
 
 /* ---- Joystick ---- */
 function initJoystick(){
-  const base=document.getElementById('joystick-base'), thumb=document.getElementById('joystick-thumb');
+  const base=document.getElementById('joystick-base'),thumb=document.getElementById('joystick-thumb');
   if(!base||!thumb)return;
   function moveThumb(e){
-    const r=base.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
-    let dx=e.clientX-cx, dy=e.clientY-cy;
+    const r=base.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+    let dx=e.clientX-cx,dy=e.clientY-cy;
     const dist=Math.sqrt(dx*dx+dy*dy);
     if(dist>JOY_MAX_DIST){dx=dx/dist*JOY_MAX_DIST;dy=dy/dist*JOY_MAX_DIST;}
     thumb.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
-    joyDX=dx/JOY_MAX_DIST; joyDY=dy/JOY_MAX_DIST;
+    joyDX=dx/JOY_MAX_DIST;joyDY=dy/JOY_MAX_DIST;
   }
-  function onRelease(e){
-    if(e.pointerId!==joyPtr)return;
-    joyActive=false;joyPtr=null;joyDX=0;joyDY=0;snapThumbToCenter(true);
-  }
+  function onRelease(e){if(e.pointerId!==joyPtr)return;joyActive=false;joyPtr=null;joyDX=0;joyDY=0;snapThumbToCenter(true);}
   base.addEventListener('pointerdown',e=>{if(joyActive)return;e.preventDefault();joyActive=true;joyPtr=e.pointerId;base.setPointerCapture(e.pointerId);thumb.style.transition='';moveThumb(e);},{passive:false});
   base.addEventListener('pointermove',e=>{if(!joyActive||e.pointerId!==joyPtr)return;e.preventDefault();moveThumb(e);},{passive:false});
   base.addEventListener('pointerup',onRelease);
@@ -257,6 +293,7 @@ function startAR(){
   arIsRunning=true;markerVisible=false;
   resetLimbs('robot');resetLimbs('mecha');
   applyModelVisibility();snapThumbToCenter(false);
+  refreshOrientLabel();
   startGameLoop();watchForArVideo();waitForVideo();
 }
 function stopAR(){
@@ -265,6 +302,7 @@ function stopAR(){
   resetLimbs('robot');resetLimbs('mecha');
   arIsRunning=false;markerVisible=false;
   hideArUI();snapThumbToCenter(false);
+  if(modalOpen) closeOrientModal();
   splash.classList.remove('hidden');
   setSplashStatus('📷','Ready to start.');startBtn.disabled=false;startBtn.textContent='Start Camera';
 }
@@ -296,5 +334,19 @@ document.addEventListener('DOMContentLoaded',()=>{
   btnJump.addEventListener('click',startJump);
   initJoystick();
   attachSceneEvents();
-  console.log('[AR] v10 — facing fix applied');
+
+  // Orientation modal
+  orientBtn.addEventListener('click', openOrientModal);
+  orientClose.addEventListener('click', closeOrientModal);
+  orientApply.addEventListener('click', applyOrientation);
+  orientOverlay.addEventListener('click', e=>{ if(e.target===orientOverlay) closeOrientModal(); });
+  orientCards.forEach(card=>{
+    card.addEventListener('click',()=>{
+      pendingOrient=card.dataset.orient;
+      syncOrientCards(pendingOrient);
+    });
+  });
+
+  refreshOrientLabel();
+  console.log('[AR] v11 ready — orientation modal enabled');
 });
